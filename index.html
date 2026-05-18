@@ -3,10 +3,251 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Каталог </title>
-<script src="tests-data.js"></script>
+<title>Знаток питомцев 🐾</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 36px 28px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+    position: relative;
+  }
+  .emoji-big { font-size: 60px; margin-bottom: 10px; }
+  h1 { font-size: 26px; font-weight: 800; color: #222; margin-bottom: 10px; }
+  .sub { color: #888; font-size: 15px; line-height: 1.6; margin-bottom: 28px; }
+  .btn {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff; border: none; border-radius: 12px;
+    padding: 14px 32px; font-size: 16px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 4px 16px rgba(102,126,234,0.4);
+    transition: transform 0.1s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .header-row {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 10px; font-size: 13px; color: #999;
+  }
+  .header-row b { color: #667eea; }
+  .timer-bar-wrap {
+    background: #eee; border-radius: 8px; height: 8px;
+    margin-bottom: 6px; overflow: hidden;
+  }
+  .timer-bar {
+    height: 100%; border-radius: 8px;
+    transition: width 1s linear, background 0.3s;
+  }
+  .timer-text {
+    text-align: right; font-size: 13px;
+    font-weight: 700; margin-bottom: 14px;
+  }
+  .question-emoji { font-size: 34px; margin-bottom: 8px; }
+  .question-text {
+    font-size: 17px; font-weight: 600; color: #222;
+    line-height: 1.5; margin-bottom: 20px;
+  }
+  .options { display: grid; gap: 10px; }
+  .option {
+    padding: 13px 16px; border-radius: 12px;
+    font-size: 15px; text-align: left;
+    font-weight: 500; cursor: pointer;
+    border: 2px solid #eee; background: #f5f5f5;
+    color: #333; transition: all 0.2s;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .option .letter {
+    font-weight: 700; opacity: 0.5; min-width: 20px;
+  }
+  .option.correct { background: #d5f5e3; border-color: #2ecc71; color: #1a7a4a; }
+  .option.wrong { background: #fde8e8; border-color: #e74c3c; color: #a93226; }
+  .option:disabled { cursor: default; }
+  .feedback-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 80px; border-radius: 20px; pointer-events: none;
+    opacity: 0; transition: opacity 0.2s; z-index: 10;
+  }
+  .feedback-overlay.show { opacity: 1; }
+  .score-big {
+    font-size: 52px; font-weight: 800; margin: 12px 0;
+  }
+  .result-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .result-msg { color: #888; font-size: 15px; margin-bottom: 28px; }
+  .hidden { display: none; }
+</style>
 </head>
 <body>
-Test
+
+<!-- СТАРТ -->
+<div class="card" id="screen-start">
+  <div class="emoji-big">🐾</div>
+  <h1>Знаток питомцев</h1>
+  <p class="sub">10 вопросов о наших любимых животных<br>У тебя 15 секунд на каждый вопрос!</p>
+  <button class="btn" onclick="startQuiz()">Начать викторину 🚀</button>
+</div>
+
+<!-- ВИКТОРИНА -->
+<div class="card hidden" id="screen-quiz">
+  <div class="feedback-overlay" id="feedback">✅</div>
+  <div class="header-row">
+    <span id="q-counter">Вопрос 1 из 10</span>
+    <span>Очки: <b id="score-display">0</b></span>
+  </div>
+  <div class="timer-bar-wrap">
+    <div class="timer-bar" id="timer-bar" style="width:100%;background:#2ecc71"></div>
+  </div>
+  <div class="timer-text" id="timer-text" style="color:#2ecc71">⏱ 15с</div>
+  <div class="question-emoji" id="q-emoji"></div>
+  <div class="question-text" id="q-text"></div>
+  <div class="options" id="options"></div>
+</div>
+
+<!-- РЕЗУЛЬТАТ -->
+<div class="card hidden" id="screen-result">
+  <div class="emoji-big">🏆</div>
+  <h1>Результат</h1>
+  <div class="score-big" id="final-score"></div>
+  <div class="result-title" id="final-title"></div>
+  <div class="result-msg" id="final-msg"></div>
+  <button class="btn" onclick="restart()">Играть снова 🔄</button>
+</div>
+
+<script>
+const questions = [
+  { q: "Сколько раз в день рекомендуется кормить взрослую кошку?", options: ["1 раз","2 раза","4 раза","6 раз"], answer: 1, emoji: "🐱" },
+  { q: "Какая порода собак считается самой маленькой в мире?", options: ["Той-терьер","Чихуахуа","Шпиц","Йоркширский терьер"], answer: 1, emoji: "🐶" },
+  { q: "Как называется домик для кроликов?", options: ["Будка","Клетка","Вольер","Крольчатник"], answer: 3, emoji: "🐰" },
+  { q: "Какая рыбка самая популярная у аквариумистов-новичков?", options: ["Пиранья","Гуппи","Осьминог","Акула"], answer: 1, emoji: "🐠" },
+  { q: "Сколько лет в среднем живёт попугай Ара?", options: ["5–10 лет","15–20 лет","40–60 лет","100+ лет"], answer: 2, emoji: "🦜" },
+  { q: "Какое животное мурлычет?", options: ["Собака","Кошка","Хомяк","Черепаха"], answer: 1, emoji: "😸" },
+  { q: "Что едят морские свинки?", options: ["Мясо и рыбу","Траву, овощи, фрукты","Только зерно","Насекомых"], answer: 1, emoji: "🐹" },
+  { q: "Как называется сезонное выпадение шерсти у собак?", options: ["Шелушение","Вылинивание","Линька","Сброс шерсти"], answer: 2, emoji: "🐕" },
+  { q: "Какая порода кошек не имеет шерсти?", options: ["Мейн-кун","Сиамская","Сфинкс","Бенгальская"], answer: 2, emoji: "🐈" },
+  { q: "Сколько пальцев на передних лапах у большинства кошек?", options: ["3","4","5","6"], answer: 2, emoji: "🐾" }
+];
+
+const titles = [
+  { min:0, max:3, title:"Начинающий любитель 🌱", color:"#e74c3c", msg:"Не расстраивайся — попробуй ещё раз! 💪" },
+  { min:4, max:6, title:"Друг животных 🤝", color:"#e67e22", msg:"Неплохо! Ты явно любишь животных 🐾" },
+  { min:7, max:8, title:"Опытный хозяин 🏠", color:"#3498db", msg:"Отличный результат! Ты знаток питомцев 🌟" },
+  { min:9, max:10, title:"Настоящий ветеринар! 🩺", color:"#2ecc71", msg:"Невероятно! Ты настоящий эксперт! 🎉" }
+];
+
+const TIMER = 15;
+let idx = 0, score = 0, timeLeft = TIMER, timerInterval = null, answered = false;
+
+function show(id) {
+  ["screen-start","screen-quiz","screen-result"].forEach(s => {
+    document.getElementById(s).classList.toggle("hidden", s !== id);
+  });
+}
+
+function startQuiz() {
+  idx = 0; score = 0; answered = false;
+  show("screen-quiz");
+  renderQuestion();
+}
+
+function renderQuestion() {
+  answered = false;
+  timeLeft = TIMER;
+  clearInterval(timerInterval);
+  const q = questions[idx];
+  document.getElementById("q-counter").textContent = `Вопрос ${idx+1} из ${questions.length}`;
+  document.getElementById("score-display").textContent = score;
+  document.getElementById("q-emoji").textContent = q.emoji;
+  document.getElementById("q-text").textContent = q.q;
+  document.getElementById("feedback").className = "feedback-overlay";
+
+  const opts = document.getElementById("options");
+  opts.innerHTML = "";
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement("button");
+    btn.className = "option";
+    btn.innerHTML = `<span class="letter">${["A","B","C","D"][i]}</span>${opt}`;
+    btn.onclick = () => handleAnswer(i, btn);
+    opts.appendChild(btn);
+  });
+
+  updateTimer();
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    updateTimer();
+    if (timeLeft <= 0) { clearInterval(timerInterval); handleAnswer(-1, null); }
+  }, 1000);
+}
+
+function updateTimer() {
+  const pct = (timeLeft / TIMER) * 100;
+  const color = timeLeft > 8 ? "#2ecc71" : timeLeft > 4 ? "#e67e22" : "#e74c3c";
+  document.getElementById("timer-bar").style.width = pct + "%";
+  document.getElementById("timer-bar").style.background = color;
+  document.getElementById("timer-text").style.color = color;
+  document.getElementById("timer-text").textContent = `⏱ ${timeLeft}с`;
+}
+
+function handleAnswer(i, btn) {
+  if (answered) return;
+  answered = true;
+  clearInterval(timerInterval);
+  const q = questions[idx];
+  const btns = document.querySelectorAll(".option");
+  btns.forEach(b => b.onclick = null);
+
+  if (i === q.answer) {
+    score++;
+    if (btn) btn.classList.add("correct");
+    showFeedback("✅", "rgba(46,204,113,0.15)");
+  } else {
+    if (btn) btn.classList.add("wrong");
+    btns[q.answer].classList.add("correct");
+    showFeedback("❌", "rgba(231,76,60,0.15)");
+  }
+
+  setTimeout(() => {
+    idx++;
+    if (idx >= questions.length) showResult();
+    else renderQuestion();
+  }, 1200);
+}
+
+function showFeedback(emoji, bg) {
+  const f = document.getElementById("feedback");
+  f.textContent = emoji;
+  f.style.background = bg;
+  f.classList.add("show");
+}
+
+function showResult() {
+  show("screen-result");
+  const t = titles.find(t => score >= t.min && score <= t.max);
+  document.getElementById("final-score").textContent = `${score} / 10`;
+  document.getElementById("final-score").style.color = t.color;
+  document.getElementById("final-title").textContent = t.title;
+  document.getElementById("final-title").style.color = t.color;
+  document.getElementById("final-msg").textContent = t.msg;
+}
+
+function restart() { startQuiz(); }
+
+// Telegram Web App init
+if (window.Telegram && window.Telegram.WebApp) {
+  Telegram.WebApp.ready();
+  Telegram.WebApp.expand();
+}
+</script>
 </body>
 </html>
